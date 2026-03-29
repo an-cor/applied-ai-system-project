@@ -135,6 +135,7 @@ Condence 4/5
 
 - What edge cases would you test next if you had more time?
 
+If I had more time, I would add more tests regarding time and scheduling. For example tasks that start and end at the exact same time or when one ends and another starts immidiately at the same time and flag conflicts accordingly. I would also tests what happens when a pet doesn't have any tasks. I would also test removing tasks, before a schedule has been generated, in the middle of a cycle and after a cycle. 
 
 ---
 
@@ -144,10 +145,16 @@ Condence 4/5
 
 - What part of this project are you most satisfied with?
 
+I was very satisfied with the UI as soon as it was created. The logic was already implemented and the UI was very easy to use after. I liked that the testing I made using CLI had a smooth transition into testing with pytest and manually using the UI. 
+
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
 
+I would also add a way to run the pytest tasks and make sure the backend is good using the UI. There is currently no button to test that the backend logic is working. This would help in not having to go back and forth with testing from the CLI and running commands to a more automated version where my tests are done only using the UI. Also, I would redesign how the input is handled in writing the time for a task. Its currently `HH:MM` which can be broken easily but a time widget can make this a lot easier to interact with.
+
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
+
+Having Claude only do one thing at a time is better than having multiple things done at once. I used separate Claude chats for different parts of the project. When I was doing too much in a single conversation, it was harder for me to follow along what Claude was implementing and I could tell the code quality dropped. I also learned I should avoid accepting AI output as-is. AI can be technically correct but misses the whole point of the app. I was able to catch things only because I know the real world use of this tool but AI does not have any context of this and just wants runnable code.

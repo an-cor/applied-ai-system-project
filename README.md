@@ -1,26 +1,29 @@
 # PawPal+ (Module 2 Project)
 
-You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
+**PawPal+** is a Streamlit app that helps a pet owner stay on top of daily pet care tasks — from morning walks to evening meds.
 
-## Scenario
+## Features
 
-A busy pet owner needs help staying consistent with pet care. They want an assistant that can:
+- Add an owner profile and multiple pets
+- Create tasks with a title, time, duration, priority, and recurrence (once / daily / weekly)
+- Generate a daily schedule sorted by time, with priority tie-breaking
+- Detect and display conflicts when two tasks overlap
+- Recurring tasks automatically queue their next occurrence when completed
+- Plain-English schedule breakdown so the plan is easy to read
+- Finds the next open time slot in the day for a new task of any duration, automatically skipping over busy blocks
+- Returns `None` if no gap fits before the end of the day (18:00), so you always get a clear answer
+- Priority shown with color-coded emoji labels (🔴 High, 🟡 Medium, 🟢 Low) in both the task list and schedule
+- Task and schedule tables use a clean dataframe layout with compact columns for Time, Duration, and Status
+- Conflict warnings stand out with highlighted `st.warning` blocks
+- Schedule breakdown is tucked into a collapsible section to keep the page uncluttered
+- CLI output shows priority labels and `✓`/`·` status symbols so printed schedules are easier to scan
 
-- Track pet care tasks (walks, feeding, meds, enrichment, grooming, etc.)
-- Consider constraints (time available, priority, owner preferences)
-- Produce a daily plan and explain why it chose that plan
+## 📸 Demo
 
-Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
-
-## What you will build
-
-Your final app should:
-
-- Let a user enter basic owner + pet info
-- Let a user add/edit tasks (duration + priority at minimum)
-- Generate a daily schedule/plan based on constraints and priorities
-- Display the plan clearly (and ideally explain the reasoning)
-- Include tests for the most important scheduling behaviors
+<!-- Add a screenshot of your running app here -->
+<!-- To capture one: run `streamlit run app.py`, take a screenshot, save it as `demo.png`, and replace the line below -->
+![PawPal+ UI](UI.png)
+![PawPal+ demo](demo.png)
 
 ## Getting started
 
@@ -63,19 +66,21 @@ The scheduler does more than just list tasks — it organizes them in a way that
 
 - Tasks are sorted by time so the schedule runs in order from morning to night
 - When two tasks are scheduled at the same time, the higher priority task goes first (high → medium → low)
+- Priority is shown with color-coded labels in both the task list and the generated schedule (🔴 High, 🟡 Medium, 🟢 Low) so it's easy to spot at a glance
 - Conflict detection checks every pair of tasks and warns you if their time windows overlap
 - Recurring tasks (daily or weekly) automatically create the next occurrence when marked complete
 
 ## UML representation of code
 
+```
 classDiagram
     class Owner {
         +str name
         +dict preferences
-        +list pets
+        +List pets
         +add_pet(pet)
-        +get_pet(name)
-        +get_all_tasks()
+        +get_pet(name) Pet
+        +get_all_tasks() List
     }
 
     class Pet {
@@ -83,10 +88,11 @@ classDiagram
         +str species
         +int age
         +str notes
-        +list tasks
+        +List tasks
         +add_task(task)
+        +complete_task(task_title)
         +remove_task(task_title)
-        +get_tasks()
+        +get_tasks() List
     }
 
     class Task {
@@ -96,19 +102,26 @@ classDiagram
         +str time
         +str frequency
         +bool completed
+        +str pet_name
+        +str date
         +mark_complete()
-        +is_recurring()
+        +is_recurring() bool
+        +next_occurrence() Task
     }
 
     class Scheduler {
-        +build_daily_schedule(owner)
-        +sort_tasks_by_time(tasks)
-        +filter_tasks(tasks, completed, pet_name)
-        +detect_conflicts(tasks)
-        +explain_schedule(tasks)
+        +build_daily_schedule(owner) List
+        +sort_tasks_by_time(tasks) List
+        +filter_tasks(tasks, completed, pet_name) List
+        +detect_conflicts(tasks) List
+        +explain_schedule(tasks) List
     }
 
     Owner "1" --> "*" Pet : has
     Pet "1" --> "*" Task : has
     Scheduler --> Owner : reads from
     Scheduler --> Task : organizes
+```
+
+This is visible using [Mermaid](https://mermaid.live/) (copy & paste)
+![Mermaid UML](mermaid_UML_updated.png)

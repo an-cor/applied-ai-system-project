@@ -169,6 +169,42 @@ class Scheduler:
                     )
         return warnings
 
+    def find_next_available_slot(
+        self, tasks: List[Task], duration_minutes: int,
+        start_hour: int = 8, end_hour: int = 18,
+    ) -> Optional[str]:
+        """Scans the day from start_hour to end_hour and returns the first
+        'HH:MM' time where a task of duration_minutes fits without overlapping
+        any existing task.  Returns None if no slot is available.
+
+        Tasks are checked in time order.  The search advances minute-by-minute
+        only when blocked, so it always lands on the earliest possible opening.
+        """
+        day_start = start_hour * 60          # e.g. 480  (08:00)
+        day_end   = end_hour   * 60          # e.g. 1080 (18:00)
+
+        # Build a sorted list of (start, end) intervals from existing tasks
+        busy = sorted(
+            (int(h) * 60 + int(m), int(h) * 60 + int(m) + t.duration_minutes)
+            for t in tasks
+            for h, m in [t.time.split(":")]
+        )
+
+        candidate = day_start
+        while candidate + duration_minutes <= day_end:
+            candidate_end = candidate + duration_minutes
+            # Find any busy block that overlaps this candidate window
+            blocked_until = None
+            for b_start, b_end in busy:
+                if b_start < candidate_end and candidate < b_end:
+                    blocked_until = b_end   # push past this block
+                    break
+            if blocked_until is None:
+                return f"{candidate // 60:02d}:{candidate % 60:02d}"
+            candidate = blocked_until       # jump to end of blocking task
+
+        return None
+
     def explain_schedule(self, tasks: List[Task]) -> List[str]:
         """Returns a plain-English explanation for why each task is in the schedule."""
         explanations = []

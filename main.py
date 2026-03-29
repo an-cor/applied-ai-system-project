@@ -1,16 +1,20 @@
 from pawpal_system import Task, Pet, Owner, Scheduler
 
 
+PRIORITY_LABEL = {"high": "🔴 high", "medium": "🟡 med ", "low": "🟢 low "}
+
+
 def print_tasks(tasks, label=""):
     if label:
-        print(f"\n{label}")
+        print(f"\n  {label}")
     if not tasks:
-        print("  (none)")
+        print("    (none)")
         return
     for t in tasks:
-        status = "DONE" if t.completed else "TODO"
-        recur = f"repeats {t.frequency}" if t.is_recurring() else "once"
-        print(f"  {t.time}  [{status}]  {t.title}  ({t.pet_name}, {recur}, date: {t.date})")
+        status = "✓ done" if t.completed else "· todo"
+        recur  = f"repeats {t.frequency}" if t.is_recurring() else "once"
+        pri    = PRIORITY_LABEL.get(t.priority, t.priority)
+        print(f"    {t.time}  {pri}  [{status}]  {t.title:<22}  {t.pet_name} — {recur}, {t.date}")
 
 
 def main():
@@ -62,9 +66,9 @@ def main():
     print()
     if conflicts:
         for warning in conflicts:
-            print(f"  !! {warning}")
+            print(f"  ⚠  {warning}")
     else:
-        print("  No conflicts found.")
+        print("  ✓  No conflicts found.")
 
     # ------------------------------------------------------------------ #
     # 3. Filtering
@@ -110,6 +114,22 @@ def main():
     print("\nAfter completing 'Clean Litter':")
     print("  → original marked DONE, next occurrence auto-created for 2026-03-30")
     print_tasks(luna.get_tasks())
+
+    print()
+
+    # ------------------------------------------------------------------ #
+    # 5. Next available slot
+    # ------------------------------------------------------------------ #
+    print("\n" + "=" * 55)
+    print("5. NEXT AVAILABLE SLOT")
+    print("=" * 55)
+
+    # Use the original schedule (before completing Morning Walk)
+    original_schedule = scheduler.build_daily_schedule(owner)
+    for mins in (20, 60, 90):
+        slot = scheduler.find_next_available_slot(original_schedule, duration_minutes=mins)
+        result = slot if slot else "no slot available"
+        print(f"  {mins:>3}-min task → first open slot: {result}")
 
     print()
 

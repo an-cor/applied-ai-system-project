@@ -85,6 +85,39 @@ def test_recurring_weekly_creates_next_week():
     assert tasks[1].date == "2026-04-05"
 
 
+def test_same_time_higher_priority_comes_first():
+    """When two tasks share the same time, the higher-priority one appears first."""
+    scheduler = Scheduler()
+    tasks = [
+        Task(title="Low Task",  duration_minutes=10, priority="low",  time="09:00"),
+        Task(title="High Task", duration_minutes=10, priority="high", time="09:00"),
+    ]
+
+    result = scheduler.sort_tasks_by_time(tasks)
+
+    assert result[0].title == "High Task"
+    assert result[1].title == "Low Task"
+
+
+def test_find_next_available_slot():
+    """Slot finder skips busy blocks and returns the first open window."""
+    scheduler = Scheduler()
+    tasks = [
+        # 08:00 – 09:00
+        Task(title="Morning Walk", duration_minutes=60, priority="high", time="08:00"),
+        # 09:00 – 09:30
+        Task(title="Feed",         duration_minutes=30, priority="high", time="09:00"),
+    ]
+
+    # First free 20-min gap starts at 09:30
+    slot = scheduler.find_next_available_slot(tasks, duration_minutes=20)
+    assert slot == "09:30"
+
+    # If the whole day is packed, return None
+    packed = [Task(title="Block", duration_minutes=600, priority="high", time="08:00")]
+    assert scheduler.find_next_available_slot(packed, duration_minutes=30) is None
+
+
 def test_conflict_detection_flags_overlap():
     """Two tasks whose time windows overlap produce a conflict warning."""
     scheduler = Scheduler()

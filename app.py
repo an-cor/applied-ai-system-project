@@ -1,5 +1,6 @@
 import streamlit as st
 from pawpal_system import Owner, Pet, Task, Scheduler
+from ai_planner import PawPalPlanner
 
 PRIORITY_EMOJI = {"high": "🔴 High", "medium": "🟡 Medium", "low": "🟢 Low"}
 
@@ -51,8 +52,41 @@ else:
 
 st.divider()
 
+# ── Add a task using natural language ─────────────────────────────────────────
+st.subheader("💬 Add a Task (Natural Language)")
+st.markdown("*Describe your task in plain English, e.g., 'Walk Mochi at 9 AM for 30 minutes, high priority.'*")
+
+user_request = st.text_area(
+    "Describe the task",
+    placeholder="Example: Give Luna medicine at 8 PM\nExample: Walk Mochi at 9 AM daily for 20 mins",
+    height=80,
+)
+
+if st.button("Add from Natural Language"):
+    if user_request.strip():
+        planner = PawPalPlanner(owner)
+        result = planner.parse_request(user_request)
+
+        if result.success:
+            # Task parsed successfully — add it
+            pet = owner.get_pet(result.task.pet_name)
+            pet.add_task(result.task)
+            st.success(
+                f"✅ Task created!\n"
+                f"**{result.task.title}** for **{result.task.pet_name}** at **{result.task.time}** "
+                f"({result.task.duration_minutes} min, {result.task.priority} priority, {result.task.frequency})"
+            )
+        else:
+            # Parse failed — show clarification
+            st.warning("I need more information:")
+            st.info(result.clarification_message)
+    else:
+        st.warning("Please describe the task.")
+
+st.divider()
+
 # ── Add a task ───────────────────────────────────────────────────────────────
-st.subheader("📋 Add a Task")
+st.subheader("📋 Add a Task (Structured Form)")
 
 pet_names = [p.name for p in owner.pets]
 selected_pet_name = st.selectbox("Select pet", pet_names)

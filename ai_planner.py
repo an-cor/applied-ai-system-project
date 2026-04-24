@@ -1,0 +1,260 @@
+"""Natural language task parser for PawPal+.
+
+Converts plain-English task requests into structured Task objects.
+Validates required fields and returns clarification messages if needed.
+"""
+
+import re
+from dataclasses import dataclass
+from typing import List, Optional
+from pawpal_system import Task, Owner
+
+
+@dataclass
+class TaskCreationResult:
+    """Represents the outcome of parsing a natural-language task request."""
+    success: bool
+    task: Optional[Task] = None
+    missing_fields: List[str] = None
+    clarification_message: str = ""
+
+    def __post_init__(self):
+        if self.missing_fields is None:
+            self.missing_fields = []
+
+
+class PawPalPlanner:
+    """Parses natural-language requests into structured task actions."""
+
+    def __init__(self, owner: Owner):
+        """Initialize with an owner to validate pet names.
+        
+        Args:
+            owner: The Owner instance containing known pets.
+        """
+        self.owner = owner
+        self.pet_names = [pet.name for pet in owner.pets]
+
+    def parse_request(self, request: str) -> TaskCreationResult:
+        """Parse a natural-language task request into a Task or clarification.
+
+        Args:
+            request: Plain-English task description (e.g., "Walk Mochi at 9 AM for 30 minutes").
+
+        Returns:
+            TaskCreationResult with either a valid Task or clarification message.
+        """
+        if not request or not request.strip():
+            return TaskCreationResult(
+                success=False,
+                missing_fields=["request"],
+                clarification_message="Please describe a task. Example: 'Walk Mochi at 9 AM for 30 minutes'."
+            )
+
+        # Extract fields from request
+        pet_name = self._extract_pet_name(request)
+        task_title = self._extract_task_title(request, pet_name)
+        time_str = self._extract_time(request)
+        duration = self._extract_duration(request)
+        priority = self._extract_priority(request)
+        frequency = self._extract_frequency(request)
+
+        # Validate required fields
+        missing = []
+        if not pet_name:
+            missing.append("pet name")
+        if not task_title:
+            missing.append("task title")
+        if not time_str:
+            missing.append("time (HH:MM format)")
+
+        if missing:
+            return TaskCreationResult(
+                success=False,
+                missing_fields=missing,
+                clarification_message=self._build_clarification_message(
+                    request, pet_name, task_title, time_str, duration, priority, missing
+                )
+            )
+
+        # All required fields present — construct Task
+        task = Task(
+            title=task_title,
+            duration_minutes=duration,
+            priority=priority,
+            time=time_str,
+            frequency=frequency,
+            pet_name=pet_name,
+        )
+
+        return TaskCreationResult(success=True, task=task)
+
+    def _extract_pet_name(self, request: str) -> Optional[str]:
+        """Extract pet name by matching against known pets.
+        
+        Exact match only (case-insensitive). Returns first match found.
+        """
+        request_lower = request.lower()
+        for pet_name in self.pet_names:
+            if pet_name.lower() in request_lower:
+                return pet_name  # Return original case from owner's pet list
+        return None
+
+    def _extract_task_title(self, request: str, pet_name: Optional[str]) -> Optional[str]:
+        """Extract task title from request, removing pet names and structured tokens.
+        
+        Strategy: Remove pet name, time patterns, duration patterns, and priority keywords.
+        The remaining noun phrase is the task title.
+        """
+        if not request:
+            return None
+
+        text = request
+        # Remove pet name if found
+        if pet_name:
+            text = re.sub(rf"\b{re.escape(pet_name)}\b", "", text, flags=re.IGNORECASE)
+
+        # Remove time patterns (e.g., "at 9 AM", "at 9:00")
+        text = re.sub(r"\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)?", "", text, flags=re.IGNORECASE)
+
+        # Remove duration patterns (e.g., "for 30 minutes", "for 20 mins")
+        text = re.sub(r"\bfor\s+\d+\s*(?:minute|min|hour|hr)s?", "", text, flags=re.IGNORECASE)
+
+        # Remove priority keywords and surrounding prepositions
+        priority_keywords = r"\b(?:with\s+)?(?:high|medium|low|priority|urgent|asap|routine)\b"
+        text = re.sub(priority_keywords, "", text, flags=re.IGNORECASE)
+
+        # Remove action verbs like "add", "schedule", "give"
+        text = re.sub(r"\b(?:add|schedule|give|create|set)\b", "", text, flags=re.IGNORECASE)
+
+        # Remove frequency keywords (tomorrow, daily, weekly, etc.)
+        frequency_keywords = r"\b(?:tomorrow|today|daily|weekly|every\s+day)\b"
+        text = re.sub(frequency_keywords, "", text, flags=re.IGNORECASE)
+
+        # Remove common prepositions (for, with, from, to) that might linger
+        text = re.sub(r"\b(?:for|with|from|to)\b", "", text, flags=re.IGNORECASE)
+
+        # Clean up extra punctuation and commas
+        text = re.sub(r"[,\s]+", " ", text)  # Replace commas and multiple spaces with single space
+
+        # Clean up whitespace and convert to title case
+        text = " ".join(text.split())
+        text = text.strip()
+
+        return text if text else None
+
+    def _extract_time(self, request: str) -> Optional[str]:
+        """Extract time in HH:MM format.
+        
+        Recognizes: "at 9 AM", "at 09:00", "at 3:30 PM", "at 15:30"
+        Returns time in 24-hour HH:MM format.
+        """
+        # Pattern 1 (Priority): "at HH:MM AM/PM" or "at H:MM AM/PM" (e.g., "at 3:30 PM")
+        match = re.search(r"\bat\s+(\d{1,2}):(\d{2})\s*(am|pm)", request, re.IGNORECASE)
+        if match:
+            hour, minute, meridiem = int(match.group(1)), int(match.group(2)), match.group(3).lower()
+            if meridiem == "pm" and hour != 12:
+                hour += 12
+            elif meridiem == "am" and hour == 12:
+                hour = 0
+            return f"{hour:02d}:{minute:02d}"
+
+        # Pattern 2: "at H AM/PM" or "at HH AM/PM"
+        match = re.search(r"\bat\s+(\d{1,2})\s*(am|pm)", request, re.IGNORECASE)
+        if match:
+            hour, meridiem = int(match.group(1)), match.group(2).lower()
+            if meridiem == "pm" and hour != 12:
+                hour += 12
+            elif meridiem == "am" and hour == 12:
+                hour = 0
+            return f"{hour:02d}:00"
+
+        # Pattern 3: "at HH:MM" or "at H:MM" (24-hour format)
+        match = re.search(r"\bat\s+(\d{1,2}):(\d{2})(?!\s*(?:am|pm))", request, re.IGNORECASE)
+        if match:
+            hour, minute = int(match.group(1)), int(match.group(2))
+            return f"{hour:02d}:{minute:02d}"
+
+        return None
+
+    def _extract_duration(self, request: str) -> int:
+        """Extract duration in minutes.
+        
+        Recognizes: "for 30 minutes", "for 20 mins", "for 1 hour", "for 2 hrs"
+        Defaults to 30 minutes if not found.
+        """
+        # Pattern: "for N minute(s) / min(s) / hour(s) / hr(s)"
+        match = re.search(r"\bfor\s+(\d+)\s*(?:minute|min|hour|hr)s?", request, re.IGNORECASE)
+        if match:
+            value = int(match.group(1))
+            # Check if it's hours
+            if "hour" in request[match.start():match.end()].lower() or \
+               "hr" in request[match.start():match.end()].lower():
+                return value * 60
+            return value
+
+        return 30  # Default: 30 minutes
+
+    def _extract_priority(self, request: str) -> str:
+        """Extract priority level from request keywords.
+        
+        Recognizes: "high", "urgent", "asap" → "high"
+                   "low", "routine" → "low"
+                   Default: "medium"
+        """
+        request_lower = request.lower()
+
+        if re.search(r"\b(?:high|urgent|asap|immediately)\b", request_lower):
+            return "high"
+        elif re.search(r"\b(?:low|routine|whenever)\b", request_lower):
+            return "low"
+        else:
+            return "medium"
+
+    def _extract_frequency(self, request: str) -> str:
+        """Extract frequency/recurrence from request keywords.
+        
+        Recognizes: "daily", "every day" → "daily"
+                   "weekly", "every week" → "weekly"
+                   Default: "once"
+        """
+        request_lower = request.lower()
+
+        if re.search(r"\b(?:daily|every\s+day|each\s+day)\b", request_lower):
+            return "daily"
+        elif re.search(r"\b(?:weekly|every\s+week)\b", request_lower):
+            return "weekly"
+        else:
+            return "once"
+
+    def _build_clarification_message(
+        self,
+        request: str,
+        pet_name: Optional[str],
+        task_title: Optional[str],
+        time_str: Optional[str],
+        duration: int,
+        priority: str,
+        missing: List[str],
+    ) -> str:
+        """Build a friendly clarification message for missing or unclear fields."""
+        understood = []
+        if pet_name:
+            understood.append(f"pet={pet_name}")
+        if task_title:
+            understood.append(f"task={task_title}")
+        if time_str:
+            understood.append(f"time={time_str}")
+        if duration != 30:
+            understood.append(f"duration={duration}min")
+        if priority != "medium":
+            understood.append(f"priority={priority}")
+
+        understood_str = ", ".join(understood) if understood else "nothing"
+        missing_str = ", ".join(missing)
+
+        msg = f"I understood: {understood_str}\n\n"
+        msg += f"I need: {missing_str}\n\n"
+        msg += "Example: 'Walk Mochi at 9 AM for 30 minutes, high priority'"
+
+        return msg

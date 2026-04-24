@@ -30,6 +30,44 @@ This is explicitly required by the rubric.
 - Explain daily schedule in plain English
 - Existing deterministic scheduler ensures reliable outputs
 
+## Functionality 1: Natural-Language Task Creation
+
+**Status:** ✅ Implemented and tested (55 passing tests)
+
+Users can now describe pet care tasks in plain English instead of filling out structured forms. The system parses requests, extracts required information (pet name, task title, time), and creates tasks automatically.
+
+### Supported inputs
+
+```
+"Walk Mochi at 9 AM"
+"Give Luna medicine at 8 PM"
+"Schedule feeding for Max at 7 AM with high priority"
+"Groom Mochi at 2 PM for 20 minutes daily"
+"Give Mochi medication at 20:00 for 5 minutes, urgent"
+```
+
+### Clarification behavior
+
+If required information is missing, the system returns a friendly clarification message instead of creating a task:
+
+```
+User: "Walk Mochi for 30 minutes"
+System: "I understood: pet=Mochi, task=Walk, duration=30min
+         I need: time (HH:MM format)
+         Example: 'Walk Mochi at 9 AM for 30 minutes, high priority'"
+```
+
+Missing fields are validated strictly: **pet name, task title, and time are required**. Duration, priority, and frequency use safe defaults (30 min, medium, once).
+
+### Current limitations
+
+- ⏸️ **Conflict detection** — The system creates tasks at requested times without checking for overlaps. Conflicts can be reviewed in the generated schedule afterward.
+- ⏸️ **Time suggestions** — No alternative time recommendations yet. If a requested time has a conflict, users must manually adjust and retry.
+- ⏸️ **Fuzzy pet name matching** — Pet names must match exactly (case-insensitive). "Moch" will not match "Mochi".
+- ⏸️ **Task editing via NL** — Natural-language parsing is for creation only; editing uses the structured form.
+
+These features are part of future Functionality phases.
+
 ## 📸 Demo
 
 > TODO: update with new screenshots

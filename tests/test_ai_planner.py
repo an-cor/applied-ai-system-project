@@ -866,3 +866,291 @@ class TestConflictDetectionDuringParsing:
         assert len(result.conflicts) > 0
         assert "Existing Task" in result.conflicts[0]
         assert not result.task.pet_name or result.task.pet_name == "Mochi"
+
+
+class TestRequestClassification:
+    """Test request classification for Functionality 4 schedule explanation."""
+
+    def test_classify_schedule_explanation_request_basic(self, owner_with_pets):
+        """'Explain today's schedule' should classify as explain_schedule."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Explain today's schedule")
+        assert intent == "explain_schedule"
+
+    def test_classify_schedule_explanation_what_schedule(self, owner_with_pets):
+        """'What's my schedule today?' should classify as explain_schedule."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("What's my schedule today?")
+        assert intent == "explain_schedule"
+
+    def test_classify_schedule_explanation_summarize(self, owner_with_pets):
+        """'Summarize the day' should classify as explain_schedule."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Summarize the day")
+        assert intent == "explain_schedule"
+
+    def test_classify_schedule_explanation_show_plan(self, owner_with_pets):
+        """'Show me my pet care plan for today' should classify as explain_schedule."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Show me my pet care plan for today")
+        assert intent == "explain_schedule"
+
+    def test_classify_schedule_explanation_what_does(self, owner_with_pets):
+        """'What does my schedule look like today?' should classify as explain_schedule."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("What does my schedule look like today?")
+        assert intent == "explain_schedule"
+
+    def test_classify_add_task_request_basic(self, owner_with_pets):
+        """'Walk Mochi at 9 AM' should classify as add_task."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Walk Mochi at 9 AM")
+        assert intent == "add_task"
+
+    def test_classify_add_task_with_specific_time(self, owner_with_pets):
+        """Request with specific time like 'at 3 PM' should classify as add_task."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Feed Luna at 3 PM")
+        assert intent == "add_task"
+
+    def test_classify_add_task_with_action_verb(self, owner_with_pets):
+        """Request with action verb and pet should classify as add_task."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Groom Mochi at 2 PM for 30 minutes")
+        assert intent == "add_task"
+
+    def test_classify_add_task_schedule_as_verb(self, owner_with_pets):
+        """'Schedule a walk for Mochi at 4 PM' uses 'schedule' as action verb, not scope."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Schedule a walk for Mochi at 4 PM")
+        assert intent == "add_task"
+
+    def test_classify_explanation_tell_me(self, owner_with_pets):
+        """'Tell me about today's schedule' should classify as explain_schedule."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Tell me about today's schedule")
+        assert intent == "explain_schedule"
+
+    def test_classify_explanation_recap(self, owner_with_pets):
+        """'Can you recap my day?' should classify as explain_schedule."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Can you recap my day?")
+        assert intent == "explain_schedule"
+
+    def test_classify_add_task_multiple_times_in_request(self, owner_with_pets):
+        """Request with specific time should classify as add_task even without pet initially."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("at 10 AM")
+        assert intent == "add_task"
+
+    def test_classify_explain_schedule_no_specific_time(self, owner_with_pets):
+        """'Explain my pet care plan today' with no specific time should explain."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Explain my pet care plan today")
+        assert intent == "explain_schedule"
+
+
+class TestScheduleExplanation:
+    """Test schedule explanation generation for Functionality 4."""
+
+    def test_explain_schedule_empty(self, owner_with_pets):
+        """Empty schedule should return friendly message."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.success is True
+        assert result.is_empty is True
+        assert result.task_count == 0
+        assert "No tasks scheduled" in result.explanation or "clear" in result.explanation.lower()
+
+    def test_explain_schedule_single_task(self, owner_with_pets):
+        """Schedule with one task should include task details."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.success is True
+        assert result.is_empty is False
+        assert result.task_count == 1
+        assert "09:00" in result.explanation
+        assert "Morning Walk" in result.explanation
+        assert "Mochi" in result.explanation
+        assert "30 min" in result.explanation
+        assert "high" in result.explanation.lower()
+
+    def test_explain_schedule_multiple_tasks_sorted(self, owner_with_pets):
+        """Multiple tasks should be listed in time order."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        luna = owner_with_pets.get_pet("Luna")
+        
+        mochi.add_task(Task(
+            title="Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        luna.add_task(Task(
+            title="Feeding",
+            duration_minutes=15,
+            priority="medium",
+            time="08:00",
+            pet_name="Luna"
+        ))
+        mochi.add_task(Task(
+            title="Groom",
+            duration_minutes=45,
+            priority="low",
+            time="14:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.success is True
+        assert result.task_count == 3
+        
+        lines = result.explanation.split("\n")
+        explanation_text = result.explanation.lower()
+        
+        assert "08:00" in explanation_text
+        assert "09:00" in explanation_text
+        assert "14:00" in explanation_text
+        
+        idx_8 = result.explanation.find("08:00")
+        idx_9 = result.explanation.find("09:00")
+        idx_14 = result.explanation.find("14:00")
+        
+        assert idx_8 < idx_9 < idx_14
+
+    def test_explain_schedule_shows_frequency(self, owner_with_pets):
+        """Explanation should show recurring vs one-time tasks."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        
+        mochi.add_task(Task(
+            title="Daily Walk",
+            duration_minutes=30,
+            priority="medium",
+            time="09:00",
+            frequency="daily",
+            pet_name="Mochi"
+        ))
+        mochi.add_task(Task(
+            title="One-time Groom",
+            duration_minutes=45,
+            priority="medium",
+            time="14:00",
+            frequency="once",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.success is True
+        assert "repeats daily" in result.explanation.lower() or "daily" in result.explanation.lower()
+        assert "one-time" in result.explanation.lower()
+
+    def test_explain_schedule_shows_completion_status(self, owner_with_pets):
+        """Explanation should show completion status of tasks."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        
+        task1 = Task(
+            title="Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        )
+        task1.mark_complete()
+        mochi.add_task(task1)
+        
+        mochi.add_task(Task(
+            title="Feeding",
+            duration_minutes=15,
+            priority="medium",
+            time="17:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.success is True
+        assert "done" in result.explanation.lower()
+        assert "pending" in result.explanation.lower()
+
+    def test_explain_schedule_with_conflicts(self, owner_with_pets):
+        """Explanation should include conflict warnings if present."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        
+        mochi.add_task(Task(
+            title="Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        mochi.add_task(Task(
+            title="Feeding",
+            duration_minutes=20,
+            priority="medium",
+            time="09:15",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.success is True
+        assert len(result.conflict_warnings) > 0
+        assert "conflict" in result.explanation.lower()
+
+    def test_explain_schedule_no_conflicts_message(self, owner_with_pets):
+        """Explanation should show 'no conflicts' message when schedule is clear."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        
+        mochi.add_task(Task(
+            title="Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        mochi.add_task(Task(
+            title="Feeding",
+            duration_minutes=15,
+            priority="medium",
+            time="10:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.success is True
+        assert len(result.conflict_warnings) == 0
+        assert "no conflicts" in result.explanation.lower()
+
+    def test_explain_schedule_task_count_metadata(self, owner_with_pets):
+        """ScheduleExplanationResult should include task count."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        luna = owner_with_pets.get_pet("Luna")
+        
+        mochi.add_task(Task(title="Walk", duration_minutes=30, time="09:00", pet_name="Mochi", priority="medium"))
+        luna.add_task(Task(title="Feed", duration_minutes=15, time="10:00", pet_name="Luna", priority="medium"))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.explain_schedule()
+        
+        assert result.task_count == 2
+        assert "2 tasks" in result.explanation.lower() or "2 task" in result.explanation.lower()

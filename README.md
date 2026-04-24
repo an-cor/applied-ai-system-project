@@ -70,7 +70,7 @@ These features are part of future Functionality phases.
 
 ## Functionality 2: Conflict Detection
 
-**Status:** Implemented and tested (7 additional tests, 74 total passing)
+**Status:** Implemented and tested (7 additional tests, 62 total passing)
 
 Natural-language task creation now checks for scheduling conflicts before adding tasks. When a user describes a task in plain English, the system parses the request and compares the new task against all existing tasks to detect time overlaps.
 
@@ -99,7 +99,7 @@ System: "Schedule conflict detected:
 
 ## Functionality 3: Suggest Better Available Times
 
-**Status:** Implemented and tested (11 additional tests, 85 total passing)
+**Status:** Implemented and tested (11 additional tests, 73 total passing)
 
 When a natural-language task request creates a conflict, the system now automatically suggests the next available time slot when one exists. This helps users quickly find alternative times without manual trial-and-error.
 
@@ -146,6 +146,77 @@ System: "Schedule conflict detected:
          No available slots found for the rest of the day.
          Please try a different time or adjust existing tasks."
 ```
+
+## Functionality 4: Plain-English Schedule Explanation
+
+**Status:** Implemented and tested (21 additional tests, 106 total passing)
+
+Users can now ask for a plain-English explanation of their daily pet care schedule. The system distinguishes between task-creation requests and schedule-explanation requests, providing clear summaries of existing schedules.
+
+### Explanation behavior
+
+Schedule explanation requests are automatically detected and handled separately from task creation:
+
+- **Request classification**: Uses keyword matching to identify explanation requests (e.g., "explain", "what's", "summarize", "tell me") combined with time scope words (e.g., "today", "day", "schedule", "plan")
+- **Separate from task creation**: `parse_request()` remains focused on Functionality 1-3; explanation uses a dedicated `explain_schedule()` method
+- **Uses existing scheduler**: Leverages the same `Scheduler.build_daily_schedule()` logic for consistent ordering
+
+### Supported explanation requests
+
+```
+"Explain today's schedule"
+"What's my schedule today?"
+"What does my pet care plan look like today?"
+"Summarize the day"
+"Tell me about today's schedule"
+```
+
+### Explanation content
+
+The plain-English explanation includes:
+
+- **Task order**: Tasks listed in chronological order using existing scheduler logic
+- **Pet names**: Each task shows which pet it's for
+- **Task details**: Title, time, duration, priority level
+- **Completion status**: Shows "done" or "pending" for each task
+- **Recurrence**: Indicates "repeats daily/weekly" or "one-time"
+- **Conflicts**: Includes conflict warnings when overlapping tasks exist
+- **Empty schedules**: Clear message when no tasks are scheduled
+
+### Example
+
+```
+Your schedule for today:
+
+08:00 — Feeding (for Luna, 15 min, medium priority, one-time, pending)
+09:00 — Morning Walk (for Mochi, 30 min, high priority, one-time, pending)
+14:00 — Grooming (for Mochi, 45 min, low priority, one-time, pending)
+
+Total: 3 tasks.
+No conflicts detected.
+```
+
+If conflicts exist:
+
+```
+Your schedule for today:
+
+09:00 — Walk (for Mochi, 30 min, high priority, one-time, pending)
+09:15 — Feeding (for Mochi, 20 min, medium priority, one-time, pending)
+
+Total: 2 tasks.
+
+Conflicts detected:
+  - Conflict: 'Walk' (Mochi, 09:00, 30 min) overlaps 'Feeding' (Mochi, 09:15, 20 min)
+```
+
+If no tasks:
+
+```
+No tasks scheduled for today yet. Your day is clear!
+```
+
+This completes the four planned AI assistant actions for Paw AI Planner.
 
 ## 📸 Demo
 
@@ -198,6 +269,11 @@ The tests cover:
 Scheduling logic — tasks are sorted by time, and ties are broken by priority (high → medium → low)
 Recurring tasks — completing a daily or weekly task automatically queues the next occurrence
 Filtering & conflict detection — tasks can be filtered by pet or completion status, and overlapping time windows are flagged
+Natural-language parsing — plain-English task requests are converted to structured tasks with clarification for missing information
+Conflict detection during parsing — new tasks are checked against existing schedules before being added
+Time slot suggestions — when conflicts occur, the system suggests the next available time slot
+Request classification — distinguishes between task creation and schedule explanation requests
+Schedule explanation — generates plain-English summaries of daily schedules including tasks, pets, times, priorities, and conflicts
 Confidence Level: 4/5 — Core scheduling and task management behaviors are well covered. Edge cases like removing tasks and back-to-back conflict boundaries are tested too. The main gap is around the AI explanation features, which are harder to unit test.
 
 ## Smarter Scheduling

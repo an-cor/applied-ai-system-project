@@ -1,6 +1,7 @@
 import streamlit as st
 from pawpal_system import Owner, Pet, Task, Scheduler
-from ai_planner import PawPalPlanner
+from ai_planner import PawPalPlanner, ScheduleExplanationResult
+
 
 PRIORITY_EMOJI = {"high": "🔴 High", "medium": "🟡 Medium", "low": "🟢 Low"}
 
@@ -95,6 +96,44 @@ if st.button("Add from Natural Language"):
             st.info(result.clarification_message)
     else:
         st.warning("Please describe the task.")
+
+st.divider()
+
+# ── Explain today's schedule ──────────────────────────────────────────────────
+st.subheader("📝 Explain Your Schedule")
+st.markdown("*Ask about your pet care plan, e.g., 'Explain today's schedule' or 'What's my schedule today?'*")
+
+schedule_question = st.text_area(
+    "Ask about your schedule",
+    placeholder="Example: Explain today's schedule\nExample: What does my pet care plan look like today?\nExample: Summarize the day",
+    height=60,
+    key="schedule_explanation_input",
+)
+
+if st.button("Get Explanation", key="schedule_explanation_button"):
+    if schedule_question.strip():
+        planner = PawPalPlanner(owner)
+        intent = planner.classify_request(schedule_question)
+
+        if intent == "explain_schedule":
+            result = planner.explain_schedule()
+            if result.success:
+                st.markdown("**Your Schedule:**")
+                st.text(result.explanation)
+
+                if result.conflict_warnings:
+                    st.markdown("**Conflicts Detected:**")
+                    for warning in result.conflict_warnings:
+                        st.warning(warning)
+            else:
+                st.error("Could not generate schedule explanation.")
+        else:
+            st.info(
+                "It looks like you're trying to add a task. "
+                "Use the 'Add a Task' section above to create a new task."
+            )
+    else:
+        st.warning("Please ask a question about your schedule.")
 
 st.divider()
 

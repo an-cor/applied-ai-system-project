@@ -38,6 +38,26 @@ class TaskCreationResult:
             self.missing_fields = []
 
 
+@dataclass
+class ScheduleExplanationResult:
+    """Represents the outcome of a schedule explanation request.
+    
+    Fields:
+        success: True if explanation generated successfully.
+        explanation: Multi-line plain-English description of the schedule.
+        is_empty: True if there are no tasks scheduled for today.
+        task_count: Number of tasks in the schedule.
+        conflict_warnings: List of conflict warning messages (empty if none).
+        message: Additional guidance or metadata.
+    """
+    success: bool
+    explanation: str = ""
+    is_empty: bool = False
+    task_count: int = 0
+    conflict_warnings: List[str] = field(default_factory=list)
+    message: str = ""
+
+
 class PawPalPlanner:
     """Parses natural-language requests into structured task actions."""
 
@@ -49,6 +69,92 @@ class PawPalPlanner:
         """
         self.owner = owner
         self.pet_names = [pet.name for pet in owner.pets]
+
+    def classify_request(self, request: str) -> str:
+        """Classify whether the request is for task creation or schedule explanation.
+        
+        Returns:
+            "add_task" if request appears to be creating a new task.
+            "explain_schedule" if request appears to be asking for a schedule explanation.
+        
+        Detection logic:
+        - Explanation requests have: trigger words (explain, what, summary, etc.)
+          AND time scope words (today, day, schedule, plan, agenda)
+        - Add-task requests have: a specific time (at 9 AM) AND/OR explicit action verbs
+        """
+        request_lower = request.lower()
+
+        explanation_triggers = r"\b(?:explain|what|what's|what is|summary|summarize|recap|breakdown|tell me|tell|show|show me|describe)\b"
+        time_scope = r"\b(?:today|day|schedule|plan|agenda)\b"
+        task_action = r"\b(?:add|schedule|create|set|walk|feed|groom|give|play|bathe|brush|train|take)\b"
+        specific_time = r"\bat\s+(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}:\d{2})"
+
+        has_explanation_trigger = bool(re.search(explanation_triggers, request_lower))
+        has_time_scope = bool(re.search(time_scope, request_lower))
+        has_task_action = bool(re.search(task_action, request_lower))
+        has_specific_time = bool(re.search(specific_time, request_lower))
+
+        if has_explanation_trigger and has_time_scope:
+            return "explain_schedule"
+
+        if has_specific_time or (has_task_action and not has_explanation_trigger):
+            return "add_task"
+
+        if has_explanation_trigger:
+            return "explain_schedule"
+
+        return "add_task"
+
+    def explain_schedule(self) -> ScheduleExplanationResult:
+        """Generate a plain-English explanation of today's schedule.
+        
+        Returns:
+            ScheduleExplanationResult with formatted explanation, task count, and conflict info.
+        """
+        scheduler = Scheduler()
+        schedule = scheduler.build_daily_schedule(self.owner)
+
+        if not schedule:
+            return ScheduleExplanationResult(
+                success=True,
+                explanation="No tasks scheduled for today yet. Your day is clear!",
+                is_empty=True,
+                task_count=0,
+            )
+
+        conflict_warnings = scheduler.detect_conflicts(schedule)
+
+        lines = ["Your schedule for today:", ""]
+
+        for task in schedule:
+            status = "done" if task.completed else "pending"
+            recurrence = f"repeats {task.frequency}" if task.is_recurring() else "one-time"
+            line = (
+                f"{task.time} — {task.title} (for {task.pet_name}, "
+                f"{task.duration_minutes} min, {task.priority} priority, {recurrence}, {status})"
+            )
+            lines.append(line)
+
+        lines.append("")
+        lines.append(f"Total: {len(schedule)} task{'s' if len(schedule) != 1 else ''}.")
+
+        if conflict_warnings:
+            lines.append("")
+            lines.append("Conflicts detected:")
+            for warning in conflict_warnings:
+                lines.append(f"  - {warning}")
+        else:
+            lines.append("No conflicts detected.")
+
+        explanation_text = "\n".join(lines)
+
+        return ScheduleExplanationResult(
+            success=True,
+            explanation=explanation_text,
+            is_empty=False,
+            task_count=len(schedule),
+            conflict_warnings=conflict_warnings,
+        )
 
     def parse_request(self, request: str) -> TaskCreationResult:
         """Parse a natural-language task request into a Task or clarification.

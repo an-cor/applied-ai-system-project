@@ -63,7 +63,6 @@ Missing fields are validated strictly: **pet name, task title, and time are requ
 
 ### Current limitations
 
-- ⏸️ **Time suggestions** — No alternative time recommendations yet. If a requested time has a conflict, users must manually adjust and retry.
 - ⏸️ **Task editing via NL** — Natural-language parsing is for creation only; editing uses the structured form.
 - ⏸️ **Multiple pets in one request** — If multiple pet names are mentioned, the first match wins. For multi-pet tasks, use separate requests or the structured form.
 
@@ -94,10 +93,59 @@ System: "Schedule conflict detected:
          Conflict: 'Morning Walk' (Mochi, 09:00, 30 min) overlaps 'Walk' (Mochi, 09:15, 20 min)
          
          Task: Walk for Mochi at 09:15 (20 min, medium priority, once)
+         The next available slot is at 09:30.
          Please try a different time and submit again."
 ```
 
-Better-time suggestions are planned for Functionality 3.
+## Functionality 3: Suggest Better Available Times
+
+**Status:** Implemented and tested (11 additional tests, 85 total passing)
+
+When a natural-language task request creates a conflict, the system now automatically suggests the next available time slot when one exists. This helps users quickly find alternative times without manual trial-and-error.
+
+### Suggestion behavior
+
+If a conflict is detected:
+- The system shows warning messages describing each conflict (as before)
+- The parsed task details are displayed for review (as before)
+- The task is NOT added to the schedule (as before)
+- **NEW**: If a valid time slot exists later in the day, the system suggests it automatically
+- **NEW**: If no slot is available, the system clearly states "No available slots found for the rest of the day."
+- The user can then submit a new request with a different time, use the suggested time, or modify their approach
+
+The system remains under user control: no tasks are automatically moved or added.
+
+### How suggestions work
+
+Suggestions reuse the existing scheduler availability logic (`find_next_available_slot`) to ensure they respect:
+- The requested task duration
+- All existing tasks for all pets (cross-pet awareness)
+- The working day window (08:00 to 18:00)
+- Back-to-back task rules (tasks can touch but not overlap)
+
+### Example
+
+```
+User: "Schedule a grooming appointment for Max at 5 PM."
+System: "Schedule conflict detected:
+         Conflict: 'Max feeding' (Max, 17:00, 30 min) overlaps with new task
+         
+         Task: Grooming for Max at 17:00 (30 min, medium priority, once)
+         The next available slot is at 17:30.
+         Please try a different time and submit again."
+```
+
+If the day is full:
+
+```
+User: "Add an urgent task for Mochi at 8 AM for 1 hour."
+System: "Schedule conflict detected:
+         Conflict: 'Morning walk' (Mochi, 08:00, 30 min) overlaps with new task
+         
+         Task: Urgent task for Mochi at 08:00 (60 min, high priority, once)
+         No available slots found for the rest of the day.
+         Please try a different time or adjust existing tasks."
+```
 
 ## 📸 Demo
 

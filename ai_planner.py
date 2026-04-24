@@ -21,6 +21,8 @@ class TaskCreationResult:
         clarification_message: Guidance message if parsing failed.
         conflict_detected: True if the parsed task conflicts with existing tasks.
         conflicts: List of conflict warning messages.
+        suggested_time: Suggested alternative time if conflict exists and slot available.
+        suggestion_message: Message explaining the suggestion or lack thereof.
     """
     success: bool
     task: Optional[Task] = None
@@ -28,6 +30,8 @@ class TaskCreationResult:
     clarification_message: str = ""
     conflict_detected: bool = False
     conflicts: List[str] = field(default_factory=list)
+    suggested_time: Optional[str] = None
+    suggestion_message: str = ""
 
     def __post_init__(self):
         if self.missing_fields is None:
@@ -108,6 +112,14 @@ class PawPalPlanner:
         if conflict_warnings:
             result.conflict_detected = True
             result.conflicts = conflict_warnings
+            # Try to find next available slot starting from the requested time
+            requested_hour = int(time_str.split(":")[0])
+            next_slot = scheduler.find_next_available_slot(existing_tasks, task.duration_minutes, start_hour=requested_hour)
+            if next_slot:
+                result.suggested_time = next_slot
+                result.suggestion_message = f"The next available slot is at {next_slot}."
+            else:
+                result.suggestion_message = "No available slots found for the rest of the day."
         
         return result
 

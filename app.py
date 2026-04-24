@@ -78,6 +78,8 @@ if st.button("Add from Natural Language"):
                     f"({result.task.duration_minutes} min, {result.task.priority} priority, {result.task.frequency})\n\n"
                     "Please try a different time and submit again."
                 )
+                if result.suggestion_message:
+                    st.info(result.suggestion_message)
             else:
                 # Task parsed successfully with no conflicts — add it
                 pet = owner.get_pet(result.task.pet_name)

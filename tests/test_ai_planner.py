@@ -1,7 +1,7 @@
 """Tests for the AI planner natural-language parser."""
 
 import pytest
-from pawpal_system import Owner, Pet, Task
+from pawpal_system import Owner, Pet, Task, Scheduler
 from ai_planner import PawPalPlanner, TaskCreationResult
 
 
@@ -624,3 +624,245 @@ class TestConflictDetectionDuringParsing:
         assert result.success is True
         assert result.conflict_detected is False
         assert result.conflicts == []
+
+    def test_parse_conflict_with_suggestion_available(self, owner_with_pets):
+        """When conflict exists and next slot is available, suggest the time."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Feed Mochi at 09:00 for 20 minutes")  # Conflicts
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert len(result.conflicts) > 0
+        assert result.suggested_time == "09:30"  # Next available after 09:00-09:30
+        assert result.suggestion_message == "The next available slot is at 09:30."
+
+    def test_parse_conflict_with_no_suggestion(self, owner_with_pets):
+        """When conflict exists but no slot available, show no-slot message."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        # Fill the day from 08:00 to 18:00
+        mochi.add_task(Task(title="Task1", duration_minutes=60, time="08:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task2", duration_minutes=60, time="09:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task3", duration_minutes=60, time="10:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task4", duration_minutes=60, time="11:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task5", duration_minutes=60, time="12:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task6", duration_minutes=60, time="13:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task7", duration_minutes=60, time="14:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task8", duration_minutes=60, time="15:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task9", duration_minutes=60, time="16:00", pet_name="Mochi", priority="medium"))
+        mochi.add_task(Task(title="Task10", duration_minutes=60, time="17:00", pet_name="Mochi", priority="medium"))  # 17:00-18:00
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Groom Mochi at 08:00 for 30 minutes")  # Conflicts
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert len(result.conflicts) > 0
+        assert result.suggested_time is None
+        assert result.suggestion_message == "No available slots found for the rest of the day."
+
+    def test_parse_no_conflict_no_suggestion(self, owner_with_pets):
+        """When no conflict, no suggestion should be provided."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Walk Mochi at 10:00 for 30 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is False
+        assert result.suggested_time is None
+        assert result.suggestion_message == ""
+
+    def test_parse_failure_no_suggestion(self, owner_with_pets):
+        """When parsing fails, no suggestion should be provided."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Feed at 9 AM")  # Missing pet name
+        
+        assert result.success is False
+        assert result.suggested_time is None
+        assert result.suggestion_message == ""
+
+    def test_suggested_time_does_not_overlap_existing_tasks(self, owner_with_pets):
+        """Suggested time should not overlap with any existing task."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        # Add tasks at specific times
+        mochi.add_task(Task(
+            title="Task A",
+            duration_minutes=30,
+            priority="medium",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        mochi.add_task(Task(
+            title="Task B",
+            duration_minutes=30,
+            priority="medium",
+            time="10:00",
+            pet_name="Mochi"
+        ))
+        # Gap exists at 09:30-09:59 and 10:30+
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Task C for Mochi at 09:00 for 20 minutes")  # Conflicts with Task A
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert result.suggested_time == "09:30"
+        
+        # Verify suggested time doesn't overlap with existing tasks by creating a task at suggested time
+        suggested_task = Task(
+            title=result.task.title,
+            duration_minutes=result.task.duration_minutes,
+            priority=result.task.priority,
+            time=result.suggested_time,
+            pet_name=result.task.pet_name
+        )
+        all_tasks = [suggested_task] + mochi.get_tasks()
+        scheduler = Scheduler()
+        conflicts_with_suggestion = scheduler.detect_conflicts(all_tasks)
+        assert len(conflicts_with_suggestion) == 0, "Suggested time should not create new conflicts"
+
+    def test_suggested_time_respects_requested_duration(self, owner_with_pets):
+        """Suggested time should accommodate the full requested duration."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        # Create a 30-min gap: 09:00-09:30 and 10:00-10:30
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        mochi.add_task(Task(
+            title="Afternoon Walk",
+            duration_minutes=30,
+            priority="high",
+            time="10:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        # Request a 30-min slot starting at a conflict time
+        result = planner.parse_request("Feed Mochi at 09:00 for 30 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert result.suggested_time == "09:30"
+        assert result.task.duration_minutes == 30
+        
+        # Verify that 09:30 + 30 minutes = 10:00, which should not overlap with Task at 10:00
+        # (back-to-back is allowed)
+        suggested_task = Task(
+            title=result.task.title,
+            duration_minutes=result.task.duration_minutes,
+            priority=result.task.priority,
+            time=result.suggested_time,
+            pet_name=result.task.pet_name
+        )
+        all_tasks = [suggested_task] + mochi.get_tasks()
+        scheduler = Scheduler()
+        conflicts = scheduler.detect_conflicts(all_tasks)
+        assert len(conflicts) == 0
+
+    def test_suggested_time_near_day_cutoff(self, owner_with_pets):
+        """Suggested time near day cutoff (18:00) should handle no-slot correctly."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        # Fill schedule up to 17:00
+        mochi.add_task(Task(
+            title="Evening Task",
+            duration_minutes=60,
+            priority="medium",
+            time="17:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        # Request a 30-min slot when only 0 min available before 18:00
+        result = planner.parse_request("Late Task for Mochi at 17:00 for 30 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert result.suggested_time is None  # No slot at or after 17:00 for 30 min
+        assert result.suggestion_message == "No available slots found for the rest of the day."
+
+    def test_suggested_time_with_multiple_conflicts(self, owner_with_pets):
+        """Suggestion should skip over multiple conflicting tasks."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        luna = owner_with_pets.get_pet("Luna")
+        
+        # Add multiple tasks blocking certain times
+        mochi.add_task(Task(
+            title="Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        luna.add_task(Task(
+            title="Vet Visit",
+            duration_minutes=60,
+            priority="high",
+            time="09:30",
+            pet_name="Luna"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Groom Mochi at 09:00 for 20 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        # Should suggest a time after both conflicts
+        assert result.suggested_time == "10:30"
+
+    def test_parsing_failure_preserves_syntax_fields(self, owner_with_pets):
+        """Parsing failure should have all syntax fields properly initialized."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("at 3 PM")  # Missing pet and task
+        
+        assert result.success is False
+        assert result.task is None
+        assert result.suggested_time is None
+        assert result.suggestion_message == ""
+        assert len(result.missing_fields) > 0
+        assert len(result.clarification_message) > 0
+
+    def test_functionality_1_parse_all_fields_unaffected(self, owner_with_pets):
+        """Functionality 1: Parsing all required fields should work unchanged."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Walk Mochi at 2:30 PM for 45 minutes, high priority, daily")
+        
+        assert result.success is True
+        assert result.task is not None
+        assert result.task.title == "Walk"
+        assert result.task.pet_name == "Mochi"
+        assert result.task.time == "14:30"
+        assert result.task.duration_minutes == 45
+        assert result.task.priority == "high"
+        assert result.task.frequency == "daily"
+        assert result.conflict_detected is False
+
+    def test_functionality_2_conflict_detection_unaffected(self, owner_with_pets):
+        """Functionality 2: Conflict detection should work unchanged."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Existing Task",
+            duration_minutes=30,
+            priority="high",
+            time="14:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Competing Task for Mochi at 14:15 for 20 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert len(result.conflicts) > 0
+        assert "Existing Task" in result.conflicts[0]
+        assert not result.task.pet_name or result.task.pet_name == "Mochi"

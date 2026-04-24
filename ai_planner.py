@@ -5,18 +5,29 @@ Validates required fields and returns clarification messages if needed.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
-from pawpal_system import Task, Owner
+from pawpal_system import Task, Owner, Scheduler
 
 
 @dataclass
 class TaskCreationResult:
-    """Represents the outcome of parsing a natural-language task request."""
+    """Represents the outcome of parsing a natural-language task request.
+    
+    Fields:
+        success: True if parsing succeeded (regardless of conflicts).
+        task: The parsed Task object if successful, None otherwise.
+        missing_fields: List of fields that were missing (e.g., ['pet name', 'time']).
+        clarification_message: Guidance message if parsing failed.
+        conflict_detected: True if the parsed task conflicts with existing tasks.
+        conflicts: List of conflict warning messages.
+    """
     success: bool
     task: Optional[Task] = None
     missing_fields: List[str] = None
     clarification_message: str = ""
+    conflict_detected: bool = False
+    conflicts: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.missing_fields is None:
@@ -87,7 +98,18 @@ class PawPalPlanner:
             pet_name=pet_name,
         )
 
-        return TaskCreationResult(success=True, task=task)
+        # Check for conflicts with existing tasks
+        existing_tasks = self.owner.get_all_tasks()
+        all_tasks = [task] + existing_tasks
+        scheduler = Scheduler()
+        conflict_warnings = scheduler.detect_conflicts(all_tasks)
+        
+        result = TaskCreationResult(success=True, task=task)
+        if conflict_warnings:
+            result.conflict_detected = True
+            result.conflicts = conflict_warnings
+        
+        return result
 
     def _extract_pet_name(self, request: str) -> Optional[str]:
         """Extract pet name by matching against known pets.

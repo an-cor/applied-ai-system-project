@@ -68,14 +68,25 @@ if st.button("Add from Natural Language"):
         result = planner.parse_request(user_request)
 
         if result.success:
-            # Task parsed successfully — add it
-            pet = owner.get_pet(result.task.pet_name)
-            pet.add_task(result.task)
-            st.success(
-                f"✅ Task created!\n"
-                f"**{result.task.title}** for **{result.task.pet_name}** at **{result.task.time}** "
-                f"({result.task.duration_minutes} min, {result.task.priority} priority, {result.task.frequency})"
-            )
+            if result.conflict_detected:
+                # Conflict detected — show warnings but do not add task
+                st.warning("Schedule conflict detected:")
+                for conflict in result.conflicts:
+                    st.warning(conflict)
+                st.info(
+                    f"Task: **{result.task.title}** for **{result.task.pet_name}** at **{result.task.time}** "
+                    f"({result.task.duration_minutes} min, {result.task.priority} priority, {result.task.frequency})\n\n"
+                    "Please try a different time and submit again."
+                )
+            else:
+                # Task parsed successfully with no conflicts — add it
+                pet = owner.get_pet(result.task.pet_name)
+                pet.add_task(result.task)
+                st.success(
+                    f"Task created!\n"
+                    f"**{result.task.title}** for **{result.task.pet_name}** at **{result.task.time}** "
+                    f"({result.task.duration_minutes} min, {result.task.priority} priority, {result.task.frequency})"
+                )
         else:
             # Parse failed — show clarification
             st.warning("I need more information:")

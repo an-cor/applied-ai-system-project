@@ -1,7 +1,7 @@
 """Tests for the AI planner natural-language parser."""
 
 import pytest
-from pawpal_system import Owner, Pet
+from pawpal_system import Owner, Pet, Task
 from ai_planner import PawPalPlanner, TaskCreationResult
 
 
@@ -479,3 +479,148 @@ class TestIntegrationWithPawPal:
         assert len(schedule) == 1
         assert schedule[0].title == "Walk"
         assert schedule[0].time == "09:00"
+
+
+class TestConflictDetectionDuringParsing:
+    """Test conflict detection when parsing natural-language task requests."""
+
+    def test_parse_detects_conflict_with_existing_task(self, owner_with_pets):
+        """New task that overlaps with existing task should be marked as conflicting."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Feed Mochi at 09:15 for 20 minutes")
+        
+        assert result.success is True
+        assert result.task is not None
+        assert result.conflict_detected is True
+        assert len(result.conflicts) > 0
+        assert "Morning Walk" in result.conflicts[0]
+        assert "Feed" in result.conflicts[0]
+
+    def test_parse_no_conflict_when_times_separate(self, owner_with_pets):
+        """New task at different time should not conflict."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Feed Mochi at 10:00 for 20 minutes")
+        
+        assert result.success is True
+        assert result.task is not None
+        assert result.conflict_detected is False
+        assert len(result.conflicts) == 0
+
+    def test_parse_detects_multiple_conflicts(self, owner_with_pets):
+        """New task that conflicts with multiple existing tasks should report all conflicts."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        luna = owner_with_pets.get_pet("Luna")
+        luna.add_task(Task(
+            title="Cat Feeding",
+            duration_minutes=10,
+            priority="high",
+            time="09:20",
+            pet_name="Luna"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Groom Mochi at 09:15 for 30 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert len(result.conflicts) >= 2
+
+    def test_parse_conflicts_across_different_pets(self, owner_with_pets):
+        """Conflicts should be detected across different pets (all tasks share time space)."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        luna = owner_with_pets.get_pet("Luna")
+        luna.add_task(Task(
+            title="Vet Appointment",
+            duration_minutes=60,
+            priority="high",
+            time="08:45",
+            pet_name="Luna"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Feed Mochi at 09:10 for 20 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is True
+        assert len(result.conflicts) > 0
+
+    def test_parse_failure_no_conflict_check(self, owner_with_pets):
+        """If parsing fails, conflict_detected should remain False (no check performed)."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        # Missing time — parse should fail
+        result = planner.parse_request("Walk Mochi for 30 minutes")
+        
+        assert result.success is False
+        assert result.task is None
+        assert result.conflict_detected is False
+        assert len(result.conflicts) == 0
+
+    def test_parse_no_conflict_back_to_back_tasks(self, owner_with_pets):
+        """Back-to-back tasks (one ends when other starts) should not conflict."""
+        mochi = owner_with_pets.get_pet("Mochi")
+        mochi.add_task(Task(
+            title="Morning Walk",
+            duration_minutes=30,
+            priority="high",
+            time="09:00",
+            pet_name="Mochi"
+        ))
+        
+        planner = PawPalPlanner(owner_with_pets)
+        # Starts exactly when previous task ends
+        result = planner.parse_request("Feed Mochi at 09:30 for 20 minutes")
+        
+        assert result.success is True
+        assert result.task is not None
+        assert result.conflict_detected is False
+        assert len(result.conflicts) == 0
+
+    def test_parse_conflict_fields_initialized_on_success_no_conflict(self, owner_with_pets):
+        """When parsing succeeds with no conflict, conflict fields should be explicitly False/empty."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Walk Mochi at 09:00 for 30 minutes")
+        
+        assert result.success is True
+        assert result.conflict_detected is False
+        assert result.conflicts == []

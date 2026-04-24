@@ -63,12 +63,41 @@ Missing fields are validated strictly: **pet name, task title, and time are requ
 
 ### Current limitations
 
-- ⏸️ **Conflict detection** — The system creates tasks at requested times without checking for overlaps. Conflicts can be reviewed in the generated schedule afterward.
 - ⏸️ **Time suggestions** — No alternative time recommendations yet. If a requested time has a conflict, users must manually adjust and retry.
 - ⏸️ **Task editing via NL** — Natural-language parsing is for creation only; editing uses the structured form.
 - ⏸️ **Multiple pets in one request** — If multiple pet names are mentioned, the first match wins. For multi-pet tasks, use separate requests or the structured form.
 
 These features are part of future Functionality phases.
+
+## Functionality 2: Conflict Detection
+
+**Status:** Implemented and tested (7 additional tests, 74 total passing)
+
+Natural-language task creation now checks for scheduling conflicts before adding tasks. When a user describes a task in plain English, the system parses the request and compares the new task against all existing tasks to detect time overlaps.
+
+### Conflict behavior
+
+If a conflict is detected:
+- The system shows warning messages describing each conflict
+- The parsed task details are displayed for review
+- The task is NOT automatically added to the schedule
+- The user must modify their request (typically changing the time) and try again
+
+If no conflict exists:
+- The task is added normally as before
+
+### Example
+
+```
+User: "Walk Mochi at 9:15 for 20 minutes"
+System: "Schedule conflict detected:
+         Conflict: 'Morning Walk' (Mochi, 09:00, 30 min) overlaps 'Walk' (Mochi, 09:15, 20 min)
+         
+         Task: Walk for Mochi at 09:15 (20 min, medium priority, once)
+         Please try a different time and submit again."
+```
+
+Better-time suggestions are planned for Functionality 3.
 
 ## 📸 Demo
 

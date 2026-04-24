@@ -127,8 +127,10 @@ if st.button("Get Explanation", key="schedule_explanation_button"):
                         st.warning(warning)
             else:
                 st.error("Could not generate schedule explanation.")
-        elif intent == "unsupported":
+        elif intent == "unsupported_medical":
             st.info("Paw AI Planner only helps with scheduling pet care tasks. For medical, nutrition, or health advice, please consult a veterinarian.")
+        elif intent == "unsupported":
+            st.info("Paw AI Planner only helps with scheduling pet care tasks.")
         else:
             st.info(
                 "It looks like you're trying to add a task. "

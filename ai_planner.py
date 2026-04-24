@@ -88,16 +88,21 @@ class PawPalPlanner:
 
         explanation_triggers = r"\b(?:explain|what|what's|what is|summary|summarize|recap|breakdown|tell me|tell|show|show me|describe|should|how)\b"
         schedule_scope = r"\b(?:schedule|plan|agenda|tasks|pet care plan|day's plan|today's plan|day)\b"
+        medical_scope = r"\b(?:medicine|medication|food|nutrition|health|dosage|veterinarian|vet|medical|diet|treatment|pill|tablet|supplement)\b"
         task_action = r"\b(?:add|schedule|create|set|walk|feed|groom|give|play|bathe|brush|train|take)\b"
         specific_time = r"\bat\s+(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}:\d{2})"
 
         has_explanation_trigger = bool(re.search(explanation_triggers, request_lower))
         has_schedule_scope = bool(re.search(schedule_scope, request_lower))
+        has_medical_scope = bool(re.search(medical_scope, request_lower))
         has_task_action = bool(re.search(task_action, request_lower))
         has_specific_time = bool(re.search(specific_time, request_lower))
 
         if has_explanation_trigger and has_schedule_scope:
             return "explain_schedule"
+
+        if has_explanation_trigger and has_medical_scope and not has_schedule_scope:
+            return "unsupported_medical"
 
         if has_explanation_trigger and not has_schedule_scope:
             return "unsupported"
@@ -182,10 +187,15 @@ class PawPalPlanner:
                 success=False,
                 clarification_message="Use the schedule explanation feature for schedule questions."
             )
-        elif classification == "unsupported":
+        elif classification == "unsupported_medical":
             return TaskCreationResult(
                 success=False,
                 clarification_message="Paw AI Planner only helps with scheduling pet care tasks. For medical, nutrition, or health advice, please consult a veterinarian."
+            )
+        elif classification == "unsupported":
+            return TaskCreationResult(
+                success=False,
+                clarification_message="Paw AI Planner only helps with scheduling pet care tasks."
             )
 
         # Extract fields from request

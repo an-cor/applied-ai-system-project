@@ -422,6 +422,8 @@ This is important because it makes the system more trustworthy and avoids bad sc
 
 ## Unsupported actions
 
+Paw AI Planner only supports scheduling-related pet care tasks. Medical or nutrition advice requests return a veterinarian guidance message, while unrelated requests such as weather or jokes return a general scheduling-only message.
+
 To keep the project focused and realistic, the AI assistant will not support the following:
 
 1. Veterinary or medical advice

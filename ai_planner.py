@@ -71,37 +71,39 @@ class PawPalPlanner:
         self.pet_names = [pet.name for pet in owner.pets]
 
     def classify_request(self, request: str) -> str:
-        """Classify whether the request is for task creation or schedule explanation.
+        """Classify whether the request is for task creation, schedule explanation, or unsupported.
         
         Returns:
             "add_task" if request appears to be creating a new task.
             "explain_schedule" if request appears to be asking for a schedule explanation.
+            "unsupported" if request appears to be asking for non-scheduling advice or information.
         
         Detection logic:
         - Explanation requests have: trigger words (explain, what, summary, etc.)
-          AND time scope words (today, day, schedule, plan, agenda)
+          AND schedule scope words (schedule, plan, agenda, tasks, pet care plan, day's plan, today's plan)
+        - Unsupported requests have: trigger words AND no schedule scope words
         - Add-task requests have: a specific time (at 9 AM) AND/OR explicit action verbs
         """
         request_lower = request.lower()
 
-        explanation_triggers = r"\b(?:explain|what|what's|what is|summary|summarize|recap|breakdown|tell me|tell|show|show me|describe)\b"
-        time_scope = r"\b(?:today|day|schedule|plan|agenda)\b"
+        explanation_triggers = r"\b(?:explain|what|what's|what is|summary|summarize|recap|breakdown|tell me|tell|show|show me|describe|should|how)\b"
+        schedule_scope = r"\b(?:schedule|plan|agenda|tasks|pet care plan|day's plan|today's plan|day)\b"
         task_action = r"\b(?:add|schedule|create|set|walk|feed|groom|give|play|bathe|brush|train|take)\b"
         specific_time = r"\bat\s+(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}:\d{2})"
 
         has_explanation_trigger = bool(re.search(explanation_triggers, request_lower))
-        has_time_scope = bool(re.search(time_scope, request_lower))
+        has_schedule_scope = bool(re.search(schedule_scope, request_lower))
         has_task_action = bool(re.search(task_action, request_lower))
         has_specific_time = bool(re.search(specific_time, request_lower))
 
-        if has_explanation_trigger and has_time_scope:
+        if has_explanation_trigger and has_schedule_scope:
             return "explain_schedule"
+
+        if has_explanation_trigger and not has_schedule_scope:
+            return "unsupported"
 
         if has_specific_time or (has_task_action and not has_explanation_trigger):
             return "add_task"
-
-        if has_explanation_trigger:
-            return "explain_schedule"
 
         return "add_task"
 
@@ -170,6 +172,20 @@ class PawPalPlanner:
                 success=False,
                 missing_fields=["request"],
                 clarification_message="Please describe a task. Example: 'Walk Mochi at 9 AM for 30 minutes'."
+            )
+
+        # Check request classification
+        classification = self.classify_request(request)
+        if classification == "explain_schedule":
+            # This should be handled by explain_schedule(), not here
+            return TaskCreationResult(
+                success=False,
+                clarification_message="Use the schedule explanation feature for schedule questions."
+            )
+        elif classification == "unsupported":
+            return TaskCreationResult(
+                success=False,
+                clarification_message="Paw AI Planner only helps with scheduling pet care tasks. For medical, nutrition, or health advice, please consult a veterinarian."
             )
 
         # Extract fields from request

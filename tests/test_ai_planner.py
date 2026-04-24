@@ -81,6 +81,38 @@ class TestPetNameExtraction:
         # Should match first pet found (Alpha appears first in text)
         assert result.task.pet_name == "Alpha"
 
+    def test_extract_pet_name_feed_luna_example(self, owner_with_pets):
+        """Test pet name extraction for 'Feed Luna at 7 PM for 15 minutes'."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Feed Luna at 7 PM for 15 minutes")
+        assert result.success is True
+        assert result.task.pet_name == "Luna"
+        assert result.task.title == "Feed"
+
+    def test_extract_pet_name_schedule_feeding_luna_example(self, owner_with_pets):
+        """Test pet name extraction for 'Schedule feeding for Luna at 9:05 AM for 15 minutes'."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Schedule feeding for Luna at 9:05 AM for 15 minutes")
+        assert result.success is True
+        assert result.task.pet_name == "Luna"
+        assert result.task.title == "feeding"
+
+    def test_extract_pet_name_give_medicine_luna_example(self, owner_with_pets):
+        """Test pet name extraction for 'Give Luna medicine at 8 PM for 10 minutes, daily'."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Give Luna medicine at 8 PM for 10 minutes, daily")
+        assert result.success is True
+        assert result.task.pet_name == "Luna"
+        assert result.task.title == "medicine"
+
+    def test_extract_pet_name_add_training_luna_example(self, owner_with_pets):
+        """Test pet name extraction for 'Add training for Luna at 9 AM for 45 minutes'."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Add training for Luna at 9 AM for 45 minutes")
+        assert result.success is True
+        assert result.task.pet_name == "Luna"
+        assert result.task.title == "training"
+
 
 class TestTimeExtraction:
     """Test time extraction in various formats."""
@@ -361,12 +393,12 @@ class TestUnsupportedRequests:
     """Test handling of unrelated or unsupported requests."""
 
     def test_unrelated_request_no_pet_or_time(self, owner_with_pets):
-        """Completely unrelated text should be rejected safely (missing required fields)."""
+        """Completely unrelated text should be rejected safely."""
         planner = PawPalPlanner(owner_with_pets)
         result = planner.parse_request("What's the weather like today?")
         assert result.success is False
         assert result.task is None
-        assert "pet name" in result.clarification_message.lower() or "time" in result.clarification_message.lower()
+        assert "Paw AI Planner only helps with scheduling" in result.clarification_message
 
     def test_unrelated_request_random_text(self, owner_with_pets):
         """Random gibberish should fail gracefully."""
@@ -377,11 +409,11 @@ class TestUnsupportedRequests:
         assert len(result.missing_fields) > 0
 
     def test_unrelated_request_math_problem(self, owner_with_pets):
-        """Math problem should be rejected (missing pet and time)."""
+        """Math problem should be rejected."""
         planner = PawPalPlanner(owner_with_pets)
         result = planner.parse_request("What is 2 + 2?")
         assert result.success is False
-        assert "pet name" in result.clarification_message.lower() or "time" in result.clarification_message.lower()
+        assert "Paw AI Planner only helps with scheduling" in result.clarification_message
 
     def test_unrelated_request_movie_quote(self, owner_with_pets):
         """Movie quote should be rejected (missing required fields)."""
@@ -411,6 +443,31 @@ class TestUnsupportedRequests:
         assert result.success is False
         assert result.task is None
         assert "Please describe a task" in result.clarification_message
+
+    def test_unsupported_medicine_dosage_request(self, owner_with_pets):
+        """Medical advice request should return unsupported message."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("Should I change my dog's medicine dosage?")
+        assert result.success is False
+        assert result.task is None
+        assert "Paw AI Planner only helps with scheduling" in result.clarification_message
+        assert "veterinarian" in result.clarification_message
+
+    def test_unsupported_food_request(self, owner_with_pets):
+        """Nutrition advice request should return unsupported message."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("What food should I give Mochi?")
+        assert result.success is False
+        assert result.task is None
+        assert "Paw AI Planner only helps with scheduling" in result.clarification_message
+
+    def test_unsupported_medicine_request(self, owner_with_pets):
+        """Medicine advice request should return unsupported message."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("What medicine should I give Luna?")
+        assert result.success is False
+        assert result.task is None
+        assert "Paw AI Planner only helps with scheduling" in result.clarification_message
 
 
 class TestIntegrationWithPawPal:
@@ -948,6 +1005,42 @@ class TestRequestClassification:
         planner = PawPalPlanner(owner_with_pets)
         intent = planner.classify_request("Explain my pet care plan today")
         assert intent == "explain_schedule"
+
+    def test_classify_unsupported_weather_request(self, owner_with_pets):
+        """'What is the weather today?' should classify as unsupported."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("What is the weather today?")
+        assert intent == "unsupported"
+
+    def test_classify_unsupported_food_request(self, owner_with_pets):
+        """'What food should I give Mochi?' should classify as unsupported."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("What food should I give Mochi?")
+        assert intent == "unsupported"
+
+    def test_classify_unsupported_joke_request(self, owner_with_pets):
+        """'Tell me a joke' should classify as unsupported."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Tell me a joke")
+        assert intent == "unsupported"
+
+    def test_classify_unsupported_medicine_dosage(self, owner_with_pets):
+        """'Should I change my dog's medicine dosage?' should classify as unsupported."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("Should I change my dog's medicine dosage?")
+        assert intent == "unsupported"
+
+    def test_classify_unsupported_food_for_mochi(self, owner_with_pets):
+        """'What food should I give Mochi?' should classify as unsupported."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("What food should I give Mochi?")
+        assert intent == "unsupported"
+
+    def test_classify_unsupported_medicine_for_luna(self, owner_with_pets):
+        """'What medicine should I give Luna?' should classify as unsupported."""
+        planner = PawPalPlanner(owner_with_pets)
+        intent = planner.classify_request("What medicine should I give Luna?")
+        assert intent == "unsupported"
 
 
 class TestScheduleExplanation:

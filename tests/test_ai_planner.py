@@ -38,6 +38,49 @@ class TestPetNameExtraction:
         result = planner.parse_request("Give Luna medicine at 8 PM")
         assert result.task.pet_name == "Luna"
 
+    def test_extract_pet_name_word_boundary_not_substring(self, owner_with_pets):
+        """Pet name should NOT match as substring of another word."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("The Lunar eclipse at 9 AM")
+        # "Luna" is substring of "Lunar", but should not match without word boundary
+        assert result.success is False
+        assert "pet name" in result.missing_fields
+
+    def test_extract_pet_name_word_boundary_short_name(self):
+        """Short pet names should use word boundaries to avoid false positives."""
+        owner = Owner(name="Test")
+        owner.add_pet(Pet(name="Mo", species="dog"))
+        planner = PawPalPlanner(owner)
+        
+        # "Mo" in "Mogul" should not match
+        result = planner.parse_request("Feed the Mogul at 9 AM")
+        assert result.success is False
+        assert "pet name" in result.missing_fields
+        
+        # "Mo" as standalone word should match
+        result2 = planner.parse_request("Feed Mo at 9 AM")
+        assert result2.success is True
+        assert result2.task.pet_name == "Mo"
+
+    def test_extract_pet_name_in_sentence(self, owner_with_pets):
+        """Pet name should match when used naturally in sentence."""
+        planner = PawPalPlanner(owner_with_pets)
+        result = planner.parse_request("I need to take Mochi for a walk at 3 PM")
+        assert result.task.pet_name == "Mochi"
+
+    def test_extract_pet_name_multiple_pets_first_match(self, owner_with_pets):
+        """When multiple pet names mentioned, first one found should be used."""
+        planner = PawPalPlanner(owner_with_pets)
+        # Create owner with distinct pets in known order
+        owner = Owner(name="Test")
+        owner.add_pet(Pet(name="Alpha", species="dog"))
+        owner.add_pet(Pet(name="Beta", species="cat"))
+        planner = PawPalPlanner(owner)
+        
+        result = planner.parse_request("Walk Alpha and feed Beta at 9 AM")
+        # Should match first pet found (Alpha appears first in text)
+        assert result.task.pet_name == "Alpha"
+
 
 class TestTimeExtraction:
     """Test time extraction in various formats."""

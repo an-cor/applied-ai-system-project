@@ -32,7 +32,7 @@ This is explicitly required by the rubric.
 
 ## Functionality 1: Natural-Language Task Creation
 
-**Status:** ✅ Implemented and tested (55 passing tests)
+**Status:** Implemented and tested (55 passing tests)
 
 Users can now describe pet care tasks in plain English instead of filling out structured forms. The system parses requests, extracts required information (pet name, task title, time), and creates tasks automatically.
 
@@ -59,12 +59,14 @@ System: "I understood: pet=Mochi, task=Walk, duration=30min
 
 Missing fields are validated strictly: **pet name, task title, and time are required**. Duration, priority, and frequency use safe defaults (30 min, medium, once).
 
+**Pet name matching:** Pet names are matched as complete words (word-boundary matching, case-insensitive). For example, the pet name "Luna" will match requests like "walk Luna at 9 AM" or "walk luna at 9 AM", but will NOT match "Lunar eclipse" or other text where "Luna" is part of a larger word.
+
 ### Current limitations
 
 - ⏸️ **Conflict detection** — The system creates tasks at requested times without checking for overlaps. Conflicts can be reviewed in the generated schedule afterward.
 - ⏸️ **Time suggestions** — No alternative time recommendations yet. If a requested time has a conflict, users must manually adjust and retry.
-- ⏸️ **Fuzzy pet name matching** — Pet names must match exactly (case-insensitive). "Moch" will not match "Mochi".
 - ⏸️ **Task editing via NL** — Natural-language parsing is for creation only; editing uses the structured form.
+- ⏸️ **Multiple pets in one request** — If multiple pet names are mentioned, the first match wins. For multi-pet tasks, use separate requests or the structured form.
 
 These features are part of future Functionality phases.
 

@@ -92,11 +92,14 @@ class PawPalPlanner:
     def _extract_pet_name(self, request: str) -> Optional[str]:
         """Extract pet name by matching against known pets.
         
-        Exact match only (case-insensitive). Returns first match found.
+        Word-boundary match only (case-insensitive). Returns first match found.
+        Matches pet name as a complete word: "Luna" matches "walk Luna at 9 AM"
+        but not "Lunar eclipse".
         """
         request_lower = request.lower()
         for pet_name in self.pet_names:
-            if pet_name.lower() in request_lower:
+            # Use word boundaries to match pet name as a complete word
+            if re.search(rf"\b{re.escape(pet_name.lower())}\b", request_lower):
                 return pet_name  # Return original case from owner's pet list
         return None
 

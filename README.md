@@ -88,9 +88,10 @@ streamlit run app.py
 
 ## Demo
 
-Loom walkthrough link: TODO
+Loom walkthrough link: [Watch Demo Video](https://www.loom.com/share/03008c1dd63f48c78cbc857bc6dc1b62)
+
 Screenshots are included in the repo.
 
 ## Reflection
 
-Paw AI Planner demonstrates a practical AI interface layered on a reliable scheduler backend. The project prioritizes clear behavior, explainable output, and realistic guardrails over open-ended chatbot-style responses, making it suitable for a portfolio submission. It also reflects a careful balance between natural-language flexibility and reliable rule-based scheduling.
+Paw AI Planner demonstrates a practical AI interface layered on a reliable scheduler backend. The project prioritizes clear behavior, explainable output, and realistic guardrails over open ended responses, making it suitable for a portfolio submission. It also reflects a careful balance between natural-language flexibility and reliable rule based scheduling.

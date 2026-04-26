@@ -12,7 +12,7 @@ PawPal+ was a rule-based Streamlit scheduler for pet owners that managed pets, t
 
 ## Key AI Features
 
-- Natural-language task creation from requests like "Walk Mochi at 9 AM"
+- Natural-language task creation from requests like "Walk Mocha at 9 AM"
 - Conflict detection that blocks overlapping tasks and explains the issue
 - Next-available-time suggestions when a requested slot is unavailable
 - Plain-English daily schedule explanations and request classification
@@ -48,7 +48,7 @@ System: "Schedule conflict detected. Max feeding overlaps 17:00. The next availa
 
 ```
 User: "Explain today's schedule"
-System: "Your schedule for today: 09:00 — Walk (Luna, 30 min, medium priority). 14:00 — Medication (Mochi, 10 min, high priority)."
+System: "Your schedule for today: 09:00 — Walk (Luna, 30 min, medium priority). 14:00 — Medication (Mocha, 10 min, high priority)."
 ```
 
 ## Setup Instructions
